@@ -1,0 +1,76 @@
+iimport os
+import sys
+import hashlib
+import smtplib
+from email.message import EmailMessage
+
+# Configuration
+email_from = "youremail@example.com"
+email_to = "youremail@example.com"
+email_password = "your_email_password"
+smtp_server = "smtp.example.com"
+smtp_port = 587
+output_file = "detected_changes.txt"
+
+# Important system files for Linux
+system_files = [
+    "/etc/passwd",
+    "/etc/shadow",
+    "/etc/hosts"
+]
+
+# Function to calculate the file hash
+def file_hash(file_path, algorithm="sha256"):
+    if not os.path.exists(file_path):
+        print(f"File not found: {file_path}")
+        return None
+
+    hash_algorithm = hashlib.new(algorithm)
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_algorithm.update(chunk)
+    return hash_algorithm.hexdigest()
+
+# Function to send an email notification
+def send_email_notification(subject, content):
+    msg = EmailMessage()
+    msg.set_content(content)
+    msg["Subject"] = subject
+    msg["From"] = email_from
+    msg["To"] = email_to
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(email_from, email_password)
+        server.send_message(msg)
+
+# Function to save output to a file
+def save_output_to_file(file_path, content):
+    with open(file_path, "w") as f:
+        f.write(content)
+
+# Compare file hashes and send an email notification and/or save output to a file if any changes are detected
+if __name__ == "__main__":
+    platform = sys.platform
+    if "linux" not in platform:
+        print("This script is designed for Linux-based systems only.")
+        sys.exit(1)
+
+    hashes_to_compare = {}  # Add known good hashes for each file here
+    changed_files = []
+
+    for file_path in system_files:
+        current_hash = file_hash(file_path)
+        if current_hash is None:
+            continue
+
+        known_hash = hashes_to_compare.get(file_path)
+        if known_hash and current_hash != known_hash:
+            changed_files.append(file_path)
+
+    if changed_files:
+        subject = "Detected changes in system files on Linux system"
+        content = "The following system files have been changed:\n\n" + "\n".join(changed_files)
+        send_email_notification(subject, content)
+        save_output_to_file(output_file, content)
+
